@@ -9,3 +9,11 @@ This is a mostly vibe coded edit of the device firmware from the Steam Machine [
 To use just replace the main.ino and platformio.ini files from the main project with these before flashing.  The INVERT_PULSE_CLEANUP option is disabled by default since I'm not sure what the long term implications of using this are versus the normal method.
 
 Disclaimer: This firmware changes the way your e-ink display functions and is not necessarily in line with recommended manufacturer guidelines.  You acknowledge that you are running this at your own risk and I'm not responsible for any issues that may arise from running this firmware or any variations.  
+
+Partial refresh:
+
+![Partial refresh gif](/images/partial-refresh.gif)
+
+Invert pulse refresh:
+
+![Invert pulse screen refresh](/images/invert-pulse.gif)
