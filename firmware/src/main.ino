@@ -7,6 +7,15 @@
 #include <NimBLEDevice.h>
 #include <esp_sleep.h>
 
+// Battery backend selection: the stock ESP32-S3 Feather has a MAX17048
+// fuel gauge on I2C; the ESP32 Feather V2 reads VBAT through the onboard
+// divider on A13. Auto-detected from the board target; define
+// USE_MAX17048 in build_flags to force the fuel gauge path.
+#if defined(ARDUINO_ADAFRUIT_FEATHER_ESP32S3) || defined(USE_MAX17048)
+#define BATTERY_MAX17048 1
+#include <Adafruit_MAX1704X.h>
+#endif
+
 #if defined(GABEN_STARTUP)
 #include "gaben.h"
 #endif
@@ -36,6 +45,10 @@
 
 NimBLEServer *BLE_SERVER = nullptr;
 std::string BLE_NAME = "INKTF";
+
+#if defined(BATTERY_MAX17048)
+Adafruit_MAX17048 maxlipo;
+#endif
 
 bool INVERTED = false;
 #define FG_COLOR (INVERTED ? GxEPD_WHITE : GxEPD_BLACK)
@@ -308,8 +321,16 @@ void setup()
     delay(STARTUP_DELAY_MS);
 #endif
 
+#if defined(BATTERY_MAX17048)
+    Debug.println("setting up i2c interface");
+    while (!maxlipo.begin()) {
+        Debug.println("failed to setup MAX17048");
+        delay(1000);
+    }
+#else
     // Feather V2: no MAX17048 fuel gauge; battery is read via the
     // onboard voltage divider on A13 (GPIO 35) in loop() instead.
+#endif
 
     Debug.println("setting up ble device and service");
     NimBLEDevice::init("");
@@ -420,17 +441,27 @@ void loop()
     if (BATT_DEBOUNCE > 0 && BATT_DEBOUNCE > delta) {
         BATT_DEBOUNCE -= delta;
     } else if (BATT_DEBOUNCE > 0) {
+#if defined(BATTERY_MAX17048)
+        float battp = maxlipo.cellPercent();
+        float battv = maxlipo.cellVoltage();
+        if (abs(battp - last_battp) > 1 || abs(battv - last_battv) > 0.01) {
+#else
         // Feather V2: read battery through the onboard divider (halves VBAT)
         float battv = analogReadMilliVolts(A13) * 2.0 / 1000.0;
         float battp = constrain((battv - 3.3) / (4.2 - 3.3) * 100.0, 0.0, 100.0); // rough estimate
-        // 0.05 V threshold (was 0.01 for the fuel gauge) so ADC noise
+        // 0.05 V threshold (vs 0.01 for the fuel gauge) so ADC noise
         // doesn't trigger constant e-ink refreshes
         if (abs(battp - last_battp) > 1 || abs(battv - last_battv) > 0.05) {
+#endif
             last_battp = battp;
             last_battv = battv;
             Debug.print("batt: ");
             Debug.print(battp, 1);
             Debug.print("% total, ");
+#if defined(BATTERY_MAX17048)
+            Debug.print(maxlipo.chargeRate(), 1);
+            Debug.print("% rate, ");
+#endif
             Debug.print(battv, 2);
             Debug.println(" V");
             std::stringstream line;
